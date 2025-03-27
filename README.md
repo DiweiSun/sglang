@@ -12,7 +12,7 @@
 
 --------------------------------------------------------------------------------
 
-| [**Blog**](https://lmsys.org/blog/2024-07-25-sglang-llama3/)
+| [**Blog**](https://lmsys.org/blog/2024-07-25-sglang-llama3/) 
 | [**Documentation**](https://docs.sglang.ai/)
 | [**Join Slack**](https://slack.sglang.ai/)
 | [**Join Bi-Weekly Development Meeting**](https://meeting.sglang.ai/)
