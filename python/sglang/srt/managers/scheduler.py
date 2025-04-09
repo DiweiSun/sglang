@@ -112,7 +112,8 @@ from sglang.srt.mem_cache.chunk_cache import ChunkCache
 from sglang.srt.mem_cache.hiradix_cache import HiRadixCache
 from sglang.srt.mem_cache.radix_cache import RadixCache
 from sglang.srt.metrics.collector import SchedulerMetricsCollector, SchedulerStats
-from sglang.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode
+from sglang.srt.model_executor.forward_batch_info import ForwardMode
+from sglang.srt.reasoning_parser import ReasoningParser
 from sglang.srt.server_args import PortArgs, ServerArgs
 from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
 from sglang.srt.torch_memory_saver_adapter import TorchMemorySaverAdapter
@@ -231,6 +232,15 @@ class Scheduler(
 
         # Init tokenizer
         self.init_tokenizer()
+
+        # Set reasoning_parser and think_end_id if --reasoning_parser is enabled
+        if self.server_args.reasoning_parser and self.tokenizer:
+            reasoning_parser = ReasoningParser(
+                model_type=self.server_args.reasoning_parser, stream_reasoning=False
+            )
+            self.tokenizer.think_end_id = self.tokenizer.encode(
+                reasoning_parser.detector.think_end_token, add_special_tokens=False
+            )[0]
 
         # Check whether overlap can be enabled
         if not self.is_generation:
@@ -379,7 +389,7 @@ class Scheduler(
         # Init profiler
         self.torch_profiler = None
         self.torch_profiler_output_dir: Optional[str] = None
-        self.torch_profiler_activities: Optional[List[str]] = None
+        self.profiler_activities: Optional[List[str]] = None
         self.profiler_target_forward_ct: Optional[int] = None
 
         # Init metrics stats
@@ -1110,7 +1120,7 @@ class Scheduler(
         )
         if memory_leak:
             msg = (
-                "KV cache pool leak detected! "
+                "token_to_kv_pool_allocator memory leak detected! "
                 f"{available_size=}, {protected_size=}, {self.max_total_num_tokens=}\n"
                 f"{self.token_to_kv_pool_allocator.available_size()=}\n"
                 f"{self.tree_cache.evictable_size()=}\n"
@@ -1121,7 +1131,7 @@ class Scheduler(
 
         if len(self.req_to_token_pool.free_slots) != self.req_to_token_pool.size:
             msg = (
-                "Memory pool leak detected!"
+                "req_to_token_pool memory leak detected!"
                 f"available_size={len(self.req_to_token_pool.free_slots)}, "
                 f"total_size={self.req_to_token_pool.size}\n"
             )
@@ -1186,7 +1196,7 @@ class Scheduler(
                 ret = None
 
         # Handle DP attention
-        if self.server_args.enable_dp_attention:
+        if self.server_args.enable_dp_attention or self.server_args.enable_sp_layernorm:
             ret, _ = self.prepare_dp_attn_batch(ret)
 
         return ret
@@ -1282,7 +1292,7 @@ class Scheduler(
         ]
 
         if self.enable_hierarchical_cache:
-            self.tree_cache.read_to_load_cache()
+            self.tree_cache.ready_to_load_cache()
 
         if adder.new_chunked_req is not None:
             assert self.chunked_req is None
@@ -1456,14 +1466,36 @@ class Scheduler(
             self.send_to_tokenizer.send_pyobj(HealthCheckOutput())
 
     def prepare_dp_attn_batch(self, local_batch: ScheduleBatch):
+        return self.prepare_dp_attn_batch_raw(
+            local_batch,
+            dp_size=self.server_args.dp_size,
+            attn_tp_size=self.attn_tp_size,
+            tp_cpu_group=self.tp_cpu_group,
+            get_idle_batch=self.get_idle_batch,
+            disable_cuda_graph=self.server_args.disable_cuda_graph,
+            spec_algorithm=self.spec_algorithm,
+            speculative_num_draft_tokens=self.server_args.speculative_num_draft_tokens,
+        )
+
+    @staticmethod
+    def prepare_dp_attn_batch_raw(
+        local_batch: ScheduleBatch,
+        dp_size,
+        attn_tp_size: int,
+        tp_cpu_group,
+        get_idle_batch,
+        disable_cuda_graph: bool,
+        spec_algorithm,
+        speculative_num_draft_tokens,
+    ):
         # Check if other DP workers have running batches
         if local_batch is None:
             num_tokens = 0
             global_num_tokens_for_logprob = 0
         elif local_batch.forward_mode.is_decode():
             num_tokens = local_batch.batch_size()
-            if not self.spec_algorithm.is_none() and self.spec_algorithm.is_eagle():
-                num_tokens = num_tokens * self.server_args.speculative_num_draft_tokens
+            if not spec_algorithm.is_none() and spec_algorithm.is_eagle():
+                num_tokens = num_tokens * speculative_num_draft_tokens
             global_num_tokens_for_logprob = num_tokens
         else:
             num_tokens = local_batch.extend_num_tokens
@@ -1482,7 +1514,7 @@ class Scheduler(
         else:
             can_cuda_graph = 0
 
-        if not self.spec_algorithm.is_none():
+        if not spec_algorithm.is_none():
             # TODO(sang): Support cuda graph when idle batch is there.
             if local_batch is None or local_batch.forward_mode.is_idle():
                 can_cuda_graph = 0
@@ -1500,13 +1532,13 @@ class Scheduler(
             dtype=torch.int64,
         )
         global_info = torch.empty(
-            (self.server_args.dp_size, self.attn_tp_size, 4),
+            (dp_size, attn_tp_size, 4),
             dtype=torch.int64,
         )
         torch.distributed.all_gather_into_tensor(
             global_info.flatten(),
             local_info,
-            group=self.tp_cpu_group,
+            group=tp_cpu_group,
         )
         global_num_tokens = global_info[:, 0, 0].tolist()
         can_cuda_graph = min(global_info[:, 0, 1].tolist())
@@ -1514,14 +1546,14 @@ class Scheduler(
         is_extend_in_batch = global_info[:, 0, 3].tolist()
 
         if local_batch is None and max(global_num_tokens) > 0:
-            local_batch = self.get_idle_batch()
+            local_batch = get_idle_batch()
 
         if local_batch is not None:
             local_batch.global_num_tokens = global_num_tokens
             local_batch.global_num_tokens_for_logprob = global_num_tokens_for_logprob
 
             # Check forward mode for cuda graph
-            if not self.server_args.disable_cuda_graph:
+            if not disable_cuda_graph:
                 local_batch.can_run_dp_cuda_graph = can_cuda_graph
 
         return local_batch, any(is_extend_in_batch)
@@ -1703,18 +1735,12 @@ class Scheduler(
     def save_remote_model(self, params):
         url = params["url"]
 
-        if isinstance(self.tp_worker, TpModelWorkerClient):
-            worker = self.tp_worker.worker
-        else:
-            worker = self.tp_worker
+        worker = self.tp_worker.worker
 
         worker.model_runner.save_remote_model(url)
 
     def save_sharded_model(self, params):
-        if isinstance(self.tp_worker, TpModelWorkerClient):
-            worker = self.tp_worker.worker
-        else:
-            worker = self.tp_worker
+        worker = self.tp_worker.worker
 
         worker.model_runner.save_sharded_model(
             path=params["path"],
@@ -1813,7 +1839,11 @@ class Scheduler(
     def profile(self, recv_req: ProfileReq):
         if recv_req.type == ProfileReqType.START_PROFILE:
             return self.start_profile(
-                recv_req.output_dir, recv_req.num_steps, recv_req.activities
+                recv_req.output_dir,
+                recv_req.num_steps,
+                recv_req.activities,
+                recv_req.with_stack,
+                recv_req.record_shapes,
             )
         else:
             return self.stop_profile()
@@ -1823,8 +1853,10 @@ class Scheduler(
         output_dir: Optional[str],
         num_steps: Optional[int],
         activities: Optional[List[str]],
+        with_stack: Optional[bool],
+        record_shapes: Optional[bool],
     ) -> None:
-        if self.torch_profiler_activities:
+        if self.profiler_activities:
             return ProfileReqOutput(
                 success=False,
                 message="Profiling is already in progress. Call /stop_profile first.",
@@ -1836,7 +1868,7 @@ class Scheduler(
             activities = ["CPU", "GPU"]
 
         self.torch_profiler_output_dir = output_dir
-        self.torch_profiler_activities = activities
+        self.profiler_activities = activities
         logger.info(
             "Profiling starts. Traces will be saved to: %s",
             self.torch_profiler_output_dir,
@@ -1853,12 +1885,16 @@ class Scheduler(
         if torchprof_activities:
             self.torch_profiler = torch.profiler.profile(
                 activities=torchprof_activities,
-                with_stack=True,
+                with_stack=with_stack if with_stack is not None else True,
+                record_shapes=record_shapes if record_shapes is not None else False,
             )
             self.torch_profiler.start()
 
         if "MEM" in activities:
             torch.cuda.memory._record_memory_history(max_entries=100000)
+
+        if "CUDA_PROFILER" in activities:
+            torch.cuda.cudart().cudaProfilerStart()
 
         if num_steps:
             self.profiler_target_forward_ct = self.forward_ct + num_steps
@@ -1868,7 +1904,7 @@ class Scheduler(
             return ProfileReqOutput(success=True, message="Succeeded")
 
     def stop_profile(self) -> None:
-        if self.torch_profiler_activities is None:
+        if self.profiler_activities is None:
             return
 
         logger.info("Stop profiling...")
@@ -1881,13 +1917,16 @@ class Scheduler(
                 )
             )
 
-        if "MEM" in self.torch_profiler_activities:
+        if "MEM" in self.profiler_activities:
             memory_profile_path = os.path.join(
-                self.torch_profiler_trace_dir,
+                self.torch_profiler_output_dir,
                 str(time.time()) + f"-TP-{self.tp_rank}-memory" + ".pickle",
             )
             torch.cuda.memory._dump_snapshot(memory_profile_path)
             torch.cuda.memory._record_memory_history(enabled=None)
+
+        if "CUDA_PROFILER" in self.profiler_activities:
+            torch.cuda.cudart().cudaProfilerStop()
 
         logger.info(
             "Profiling done. Traces are saved to: %s",
@@ -1895,7 +1934,7 @@ class Scheduler(
         )
         self.torch_profiler = None
         self.torch_profiler_output_dir = None
-        self.torch_profiler_activities = None
+        self.profiler_activities = None
 
         if self.profiler_target_forward_ct:
             self.send_to_tokenizer.send_pyobj(
@@ -1963,7 +2002,6 @@ def run_scheduler_process(
     dp_rank: Optional[int],
     pipe_writer,
 ):
-
     # Generate the prefix
     if dp_rank is None:
         prefix = f" TP{tp_rank}"
