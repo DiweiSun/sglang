@@ -39,18 +39,18 @@ jobs:
         timeout-minutes: 20
         run: |
           docker exec -w /root/sglang ci_sglang_cpu pip install pytest expecttest ray
-          
+
       - name: Run UT Cases
         timeout-minutes: 20
         run: |
           docker exec -w /root/sglang ci_sglang_cpu pytest -v test/srt/test_custom_allreduce.py
-     
+
       - name: Run standard tests
         timeout-minutes: 20
         run: |
           echo "[placeholder] for upcoming testcases...."
       - name: Cleanup container
-        if: always() 
+        if: always()
         run: |
           docker rm -f ci_sglang_cpu || true
 
