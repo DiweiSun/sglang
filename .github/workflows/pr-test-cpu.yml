@@ -1,0 +1,70 @@
+name: PR Test (CPU)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: pr-test-cpu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    if: (github.repository == 'sgl-project/sglang' || github.event_name == 'pull_request') &&
+      github.event.pull_request.draft == false
+    runs-on: emr-7470
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build --build-arg no_proxy=.intel.com --build-arg http_proxy=http://proxy-dmz.intel.com:912 --build-arg https_proxy=http://proxy-dmz.intel.com:912 \
+          -t sglang-cpu-test  -f docker/Dockerfile.xeon .
+
+      - name: Run container
+        run: |
+          docker run -dt \
+            -e https_proxy="http://proxy-dmz.intel.com:912/" \
+            -e http_proxy="http://proxy-dmz.intel.com:912/" \
+            -e no_proxy=".intel.com" \
+            -w /root/sglang \
+            --name ci_sglang_cpu \
+            sglang-cpu-test
+
+      - name: Install Dependency
+        timeout-minutes: 20
+        run: |
+          docker exec -w /root/sglang ci_sglang_cpu pip install pytest expecttest ray
+
+      - name: Run UT Cases
+        timeout-minutes: 20
+        run: |
+          docker exec -w /root/sglang ci_sglang_cpu pytest -v test/srt/test_custom_allreduce.py
+
+      - name: Run standard tests
+        timeout-minutes: 20
+        run: |
+          echo "[placeholder] for upcoming testcases...."
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker rm -f ci_sglang_cpu || true
+
+
+  finish:
+    if: always()
+    needs: [build-and-test]
+    runs-on: emr-7470
+    steps:
+      - name: Check job status
+        run: |
+          if [ "${{ needs.build-and-test.result }}" != "success" ]; then
+            echo "Job failed with result: ${{ needs.build-and-test.result }}"
+            exit 1
+          fi
+          echo "All jobs completed successfully"
+          exit 0
