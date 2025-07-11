@@ -175,6 +175,8 @@ class TestIntelAMXAttnBackend(CustomTestCase):
                 "--trust-remote-code",
                 "--batch-size",
                 "4",
+                "--tp",
+                "6"
             ],
         )
 
