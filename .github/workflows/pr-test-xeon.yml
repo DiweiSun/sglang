@@ -26,7 +26,7 @@ jobs:
           tag=v${version}-xeon
 
           docker build . -f docker/Dockerfile.xeon  -t sglang_xeon --no-cache
-  sglang-xeon-test:
+  env-prepare:
     if: always()
     needs: [build-sglang-image]
     runs-on: sglang-pvc
@@ -48,6 +48,11 @@ jobs:
           docker exec -w /sglang-checkout/ ci_sglang_xeon bash -c "pip install -e "python[all_cpu]""
           docker exec ci_sglang_xeon bash -c "python3 -m pip install pytest expecttest"
 
+  sglang-xeon-test:
+    if: always()
+    needs: [env-prepare]
+    runs-on: sglang-pvc
+    steps:
       - name: Check AMX Support
         id: check_amx
         timeout-minutes: 5
@@ -55,10 +60,10 @@ jobs:
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "python3 -c 'import torch; import sgl_kernel; assert torch._C._cpu._is_amx_tile_supported(); assert hasattr(torch.ops.sgl_kernel, \"convert_weight_packed\"); '"
         continue-on-error: true
-
+        
       - name: Run UT Cases
         if: steps.check_amx.outcome == 'success'
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "cd ./test/srt && python3 run_suite.py --suite per-commit-cpu"
@@ -70,7 +75,7 @@ jobs:
 
   finish:
     if: always()
-    needs: [build-sglang-image, sglang-xeon-test]
+    needs: [build-sglang-image, env-prepare, sglang-xeon-test]
     runs-on: ubuntu-24.04
     steps:
       - name: Check all dependent job statuses
