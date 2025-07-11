@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-test:
+  build-sglang-image:
     if: github.event_name == 'pull_request'
     runs-on: sglang-pvc
     strategy:
@@ -26,7 +26,11 @@ jobs:
           tag=v${version}-xeon
 
           docker build . -f docker/Dockerfile.xeon  -t sglang_xeon --no-cache
-
+  sglang-xeon-test:
+    if: always()
+    needs: [build-sglang-image]
+    runs-on: sglang-pvc
+    steps:
       - name: Run container
         run: |
           docker run -dt \
@@ -66,7 +70,7 @@ jobs:
 
   finish:
     if: always()
-    needs: [build-test]
+    needs: [build-sglang-image, sglang-xeon-test]
     runs-on: ubuntu-24.04
     steps:
       - name: Check all dependent job statuses
