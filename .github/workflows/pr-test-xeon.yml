@@ -68,16 +68,16 @@ jobs:
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "cd ./test/srt && python3 run_suite.py --suite per-commit-cpu"
 
-      - name: Cleanup container
-        if: always()
-        run: |
-          docker rm -f ci_sglang_xeon || true
-
   finish:
     if: always()
     needs: [build-sglang-image, env-prepare, sglang-xeon-test]
     runs-on: ubuntu-24.04
     steps:
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker rm -f ci_sglang_xeon || true
+          
       - name: Check all dependent job statuses
         run: |
           results=(${{ join(needs.*.result, ' ') }})
