@@ -35,6 +35,7 @@ jobs:
       - name: Run container
         run: |
           docker run -dt \
+            -u $(id -u):$(id -g) \
             -v ${{ github.workspace }}:/sglang-checkout/ --ipc=host \
             -v ${HF_HOME}:/root/.cache/huggingface \
             --name ci_sglang_xeon \
