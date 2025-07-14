@@ -79,7 +79,7 @@ jobs:
   finish:
     if: always()
     needs: [build-sglang-image, env-prepare, sglang-xeon-test]
-    runs-on: ubuntu-24.04
+    runs-on: sglang-pvc
     steps:
       - name: Cleanup container
         if: always()
