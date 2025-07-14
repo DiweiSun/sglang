@@ -172,13 +172,13 @@ class TestIntelAMXAttnBackend(CustomTestCase):
                 "--mem-fraction-static",
                 "0.9",
                 "--max-total-tokens",
-                "65536", 
+                "65536",
                 "--disable-radix",
                 "--trust-remote-code",
                 "--batch-size",
                 "4",
                 "--tp",
-                "6"
+                "6",
             ],
         )
 

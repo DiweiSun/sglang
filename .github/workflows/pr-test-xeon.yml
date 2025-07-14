@@ -26,6 +26,7 @@ jobs:
           tag=v${version}-xeon
 
           docker build . -f docker/Dockerfile.xeon  -t sglang_xeon --no-cache
+
   env-prepare:
     if: always()
     needs: [build-sglang-image]
@@ -60,13 +61,20 @@ jobs:
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "python3 -c 'import torch; import sgl_kernel; assert torch._C._cpu._is_amx_tile_supported(); assert hasattr(torch.ops.sgl_kernel, \"convert_weight_packed\"); '"
         continue-on-error: true
-        
+
       - name: Run UT Cases
+        id: run_ut_cases
         if: steps.check_amx.outcome == 'success'
         timeout-minutes: 30
         run: |
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "cd ./test/srt && python3 run_suite.py --suite per-commit-cpu"
+
+      - name: Force fail if any step failed
+        if: always() && (steps.check_amx.outcome == 'failure' || steps.run_ut_cases.outcome == 'failure')
+        run: |
+          echo "At least one step failed, failing the job..."
+          exit 1
 
   finish:
     if: always()
@@ -77,7 +85,7 @@ jobs:
         if: always()
         run: |
           docker rm -f ci_sglang_xeon || true
-          
+
       - name: Check all dependent job statuses
         run: |
           results=(${{ join(needs.*.result, ' ') }})
