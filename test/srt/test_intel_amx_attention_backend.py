@@ -171,6 +171,8 @@ class TestIntelAMXAttnBackend(CustomTestCase):
                 "w8a8_int8",
                 "--mem-fraction-static",
                 "0.9",
+                "--max-total-tokens",
+                "65536", 
                 "--disable-radix",
                 "--trust-remote-code",
                 "--batch-size",
