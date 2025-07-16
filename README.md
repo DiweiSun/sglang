@@ -17,7 +17,7 @@
 | [**Join Slack**](https://slack.sglang.ai/)
 | [**Join Bi-Weekly Development Meeting**](https://meeting.sglang.ai/)
 | [**Roadmap**](https://github.com/sgl-project/sglang/issues/4042)
-| [**Slides**](https://github.com/sgl-project/sgl-learning-materials?tab=readme-ov-file#slides) |
+| [**Slides**](https://github.com/sgl-project/sgl-learning-materials?tab=readme-ov-file#slides) | 
 
 ## News
 - [2025/06] 🔥 SGLang, the high-performance serving infrastructure powering trillions of tokens daily, has been awarded the third batch of the Open Source AI Grant by a16z ([a16z blog](https://a16z.com/advancing-open-source-ai-through-benchmarks-and-bold-experimentation/)).
