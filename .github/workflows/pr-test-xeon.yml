@@ -20,21 +20,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
           
-      - name: Docker access
+      - name: Build and Push
         run: |
-          sudo usermod -aG docker $USER
-          newgrp docker
-          
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-    
-      - name: Build Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: docker/Dockerfile.xeon
-          tags: sglang_xeon
-          push: false  
+          version=$(cat python/sglang/version.py | cut -d'"' -f2)
+          tag=v${version}-xeon
+
+          docker build . -f docker/Dockerfile.xeon  -t sglang_xeon --no-cache  
 
       - name: Run container
         run: |
