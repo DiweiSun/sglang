@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build-test:
     if: github.event_name == 'pull_request'
-    runs-on: sglang-pvc
+    runs-on: sglang-xeon
     strategy:
       matrix:
         build_type: ['all']
@@ -58,6 +58,11 @@ jobs:
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "cd ./test/srt && python3 run_suite.py --suite per-commit-cpu"
 
+      - name: Fix permissions on workspace
+        if: ${{ always() }}
+        run: |
+          docker exec ci_sglang_xeon bash -c "chown -R $(id -u):$(id -g) /sglang-checkout/"
+          
       - name: Cleanup container
         if: always()
         run: |
