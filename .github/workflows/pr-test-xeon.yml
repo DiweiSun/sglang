@@ -19,13 +19,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Print user info
-        run: |
-          whoami
-          id
           
+      - name: Verify Docker access
+        run: docker info
+      
       - name: Build and Push
+        env:
+          DOCKER_BUILDKIT: 1
         run: |
           version=$(cat python/sglang/version.py | cut -d'"' -f2)
           tag=v${version}-xeon
