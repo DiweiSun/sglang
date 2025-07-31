@@ -25,7 +25,7 @@ jobs:
           version=$(cat python/sglang/version.py | cut -d'"' -f2)
           tag=v${version}-xeon
 
-          docker build . -f docker/Dockerfile.xeon  -t sglang_xeon --no-cache
+          docker build . -f docker/Dockerfile.xeon  -t sglang_xeon --no-cache 
 
       - name: Run container
         run: |
