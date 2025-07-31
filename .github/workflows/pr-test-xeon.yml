@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build-test:
     if: github.event_name == 'pull_request'
-    runs-on: sglang-pvc
+    runs-on: sglang-gnr
     strategy:
       matrix:
         build_type: ['all']
@@ -58,6 +58,11 @@ jobs:
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "cd ./test/srt && python3 run_suite.py --suite per-commit-cpu"
 
+      - name: Change permissions
+        if: ${{ always() }}
+        run: |
+          docker exec -t ci_sglang_xeon bash -c "sudo chown -R 1001:1001 test"
+          
       - name: Cleanup container
         if: always()
         run: |
@@ -66,7 +71,7 @@ jobs:
   finish:
     if: always()
     needs: [build-test]
-    runs-on: ubuntu-24.04
+    runs-on: sglang-gnr
     steps:
       - name: Check all dependent job statuses
         run: |
