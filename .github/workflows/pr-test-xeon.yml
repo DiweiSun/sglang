@@ -61,8 +61,8 @@ jobs:
       - name: Change permissions
         if: ${{ always() }}
         run: |
-          docker exec -t ci_sglang_xeon bash -c "sudo chown -R 1001:1001 test"
-          
+          docker exec -t ci_sglang_xeon bash -c "chown -R 1001:1001 /sglang-checkout/"
+
       - name: Cleanup container
         if: always()
         run: |
