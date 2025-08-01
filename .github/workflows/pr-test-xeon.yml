@@ -36,6 +36,13 @@ jobs:
             --name ci_sglang_xeon \
             sglang_xeon
 
+      - name: Change permission
+        timeout-minutes: 20
+        run: |
+          docker exec ci_sglang_xeon bash -c "
+            mkdir -p /tmp/ci-home &&
+            chmod -R a+w /sgl-workspace/miniforge3/lib/python3.12/site-packages 2>/dev/null || true
+          "
       - name: Install Dependency
         timeout-minutes: 20
         run: |
