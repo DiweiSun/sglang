@@ -40,7 +40,7 @@ jobs:
         timeout-minutes: 20
         run: |
           docker exec -u root ci_sglang_xeon bash -c "
-            rm -rf /tmp/ci-home && mkdir -p /tmp/ci-home &&
+            rm -rf /tmp/ci-home  &&
             chmod -R w /sgl-workspace/miniforge3/lib/python3.12/site-packages 2>/dev/null || true
           "
       - name: Install Dependency
