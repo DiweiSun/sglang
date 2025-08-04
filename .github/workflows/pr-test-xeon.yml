@@ -12,20 +12,22 @@ concurrency:
 jobs:
   build-test:
     if: github.event_name == 'pull_request'
-    runs-on: sglang-pvc
+    runs-on: sglang-xeon
     strategy:
       matrix:
         build_type: ['all']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Build and Push
-        run: |
-          version=$(cat python/sglang/version.py | cut -d'"' -f2)
-          tag=v${version}-xeon
-
-          docker build . -f docker/Dockerfile.xeon  -t sglang_xeon --no-cache
+          
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/Dockerfile.xeon
+          tags: |
+            sglang_xeon:latest
+          push: false
 
       - name: Run container
         run: |
@@ -58,6 +60,11 @@ jobs:
           docker exec -w /sglang-checkout/ ci_sglang_xeon \
             bash -c "cd ./test/srt && python3 run_suite.py --suite per-commit-cpu"
 
+      - name: Fix permissions on workspace
+        if: ${{ always() }}
+        run: |
+          docker exec ci_sglang_xeon bash -c "chown -R $(id -u):$(id -g) /sglang-checkout/"
+          
       - name: Cleanup container
         if: always()
         run: |
