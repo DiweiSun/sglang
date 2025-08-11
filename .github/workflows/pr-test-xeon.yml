@@ -27,7 +27,7 @@ jobs:
   build-test:
     if: (github.repository == 'sgl-project/sglang' || github.event_name == 'pull_request') &&
       github.event.pull_request.draft == false
-    runs-on: xeon-pvc
+    runs-on: sglang-gnr
     strategy:
       matrix:
         build_type: ['all']
@@ -88,7 +88,7 @@ jobs:
   pr-test-xeon-finish:
     if: always()
     needs: [build-test]
-    runs-on: ubuntu-latest
+    runs-on: sglang-gnr
     steps:
       - name: Check all dependent job statuses
         run: |
