@@ -7,6 +7,9 @@ import torch
 from sglang.srt.layers.attention.utils import create_flashinfer_kv_indices_triton
 from sglang.test.test_utils import CustomTestCase
 
+device_type = getattr(torch.accelerator.current_accelerator(), "type", "cpu")
+torch.set_default_device(device_type)
+
 
 class TestCreateKvIndices(CustomTestCase):
     @classmethod
@@ -24,14 +27,14 @@ class TestCreateKvIndices(CustomTestCase):
                 np.random.choice(range(max_batch), size=batch, replace=False)
             ),
             dtype=torch.int32,
-            device="cuda",
+            device=device_type,
         )
         paged_kernel_lens = torch.tensor(
             torch.from_numpy(
                 np.random.choice(range(max_context_len), size=batch, replace=False)
             ),
             dtype=torch.int32,
-            device="cuda",
+            device=device_type,
         )
 
         kv_indptr = torch.zeros((batch + 1,), dtype=torch.int32, device="cuda")
