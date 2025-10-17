@@ -7,6 +7,7 @@ import torch
 from transformers import AutoModelForCausalLM
 
 import sglang as sgl
+from sglang.srt.utils import is_cuda, is_xpu
 from sglang.test.test_utils import (
     DEFAULT_MODEL_NAME_FOR_TEST,
     DEFAULT_SMALL_MODEL_NAME_FOR_TEST,
@@ -17,7 +18,6 @@ from sglang.test.test_utils import (
     popen_launch_server,
 )
 from sglang.utils import terminate_process
-from sglang.srt.utils import is_xpu, is_cuda
 
 device_type = getattr(torch.accelerator.current_accelerator(), "type", "cpu")
 
