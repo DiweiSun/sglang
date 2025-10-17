@@ -16,7 +16,8 @@ from sglang.test.test_utils import (
     is_in_ci,
     popen_launch_server,
 )
-from sglang.utils import is_cuda, is_xpu, terminate_process
+from sglang.utils import terminate_process
+from sglang.srt.utils import is_xpu, is_cuda
 
 device_type = getattr(torch.accelerator.current_accelerator(), "type", "cpu")
 
