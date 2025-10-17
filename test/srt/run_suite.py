@@ -327,6 +327,13 @@ suite_xpu = {
     ],
 }
 
+# Add Intel XPU tests
+suite_xpu = {
+    "per-commit-xpu": [
+        TestFile("xpu/test_intel_xpu_backend.py"),
+    ],
+}
+
 # Add Ascend NPU tests
 # NOTE: please sort the test cases alphabetically by the test file name
 suite_ascend = {
